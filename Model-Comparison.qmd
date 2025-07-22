@@ -52,6 +52,11 @@ heart <- read_csv("data/heart.csv")
 #| warning: false
 summary(heart)
 ```
+#### a
+HeartDisease is a quantitative variable
+
+#### b
+This does not make much sense, as one can only either have heart disease or not have it.
 
 ### Question 2
 ```{r}
