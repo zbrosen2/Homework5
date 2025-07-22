@@ -1,0 +1,221 @@
+---
+title: "Model-Comparison"
+format: pdf
+editor: visual
+---
+
+## Task 1: Conceptual Questions
+### Question 1
+Along with ensuring the robustness of the final model, cross-validation is used 
+to select the best combination of hyperparameters for a random forest model.  There 
+are many hyperparameters that need to be tuned for a random forest model, including 
+the number of trees, maximum depth, and the number of features that are randomly 
+selected at each split.
+
+### Question 2
+A bagged (bootstrap aggregated) tree model uses the concept of bootstrap sampling 
+and aggregation to improve prediction over a single classification / regression 
+tree by reducing variance.  Bootstrap sampling uses random sampling with replacement 
+to mimic the wider population.  These are then aggregated as an ensemble model to 
+produce a final fit that has a lower variance compared to a single tree fit.
+
+### Question 3
+A general linear model is a generalization of linear regression.  It consists of 
+three components: a distribution for modeling the outcome variable, a linear predictor, 
+and a link function that "links" the response variable to the linear function of 
+the parameters.
+
+### Question 4
+Adding an interaction term to a MLR model allows the model to capture the effect 
+of two predictors together, rather than just their individual additive effects.  
+This allows the effect of one predictor to depend on the value of another.
+
+### Question 5
+We split our data into a training and test set to assess model robustness and 
+generalization.  This allows the model to be evaluated on unseen data using relevant 
+performance metrics.
+
+## Task 2: Data Prep
+### packages and data
+```{r}
+#| warning: false
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(yardstick)
+
+heart <- read_csv("data/heart.csv")
+```
+
+### Question 1
+```{r}
+#| warning: false
+summary(heart)
+```
+
+### Question 2
+```{r}
+#| warning: false
+# change HeartDisease to factor with levels Y and N and remove unneeded cols
+new_heart <- heart %>%
+  mutate(HasHeartDisease = factor(HeartDisease, labels = c("N", "Y"))) %>%
+  select(-HeartDisease, -ST_Slope)
+```
+
+## Task 3: EDA
+### Question 1
+```{r}
+#| warning: false
+ggplot(new_heart, aes(x = MaxHR, y = Age, color = HasHeartDisease)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_color_viridis_d(end = 0.75) +
+  labs(title = "Age vs. Max Heart Rate by Heart Disease Status",
+       x = "Max Heart Rate",
+       y = "Age",
+       color = "Has Heart Disease")
+```
+
+### Question 2
+
+## Task 4: Testing and Training
+### Question 1
+```{r}
+#| warning: false
+set.seed(101)
+
+data_split <- initial_split(new_heart, prop = 0.8)
+train <- training(data_split)
+test <- testing(data_split)
+```
+
+## Task 5: OLS and LASSO
+### Question 1
+```{r}
+#| warning: false
+ols_spec <- linear_reg() %>%
+  set_engine("lm")
+
+ols_recipe <- recipe(Age ~ MaxHR + HasHeartDisease, data = train) %>%
+  step_dummy(HasHeartDisease) %>%
+  step_interact(terms = ~ MaxHR:starts_with("HasHeartDisease"))
+
+ols_workflow <- workflow() %>%
+  add_model(ols_spec) %>%
+  add_recipe(ols_recipe)
+
+ols_mlr <- fit(ols_workflow, data = train)
+
+tidy(ols_mlr)
+
+# extract_fit_engine(ols_mlr) %>% summary()
+```
+
+### Question 2
+```{r}
+#| warning: false
+ols_final_rmse <- ols_mlr %>%
+  predict(test) %>%
+  pull() %>%
+  rmse_vec(truth = test$Age) %>%
+  tibble(rmse = .)
+
+ols_final_rmse
+```
+
+### Question 3
+```{r}
+#| warning: false
+LASSO_recipe <- recipe(Age ~ MaxHR + HasHeartDisease, data = train) %>%
+  step_dummy(HasHeartDisease) %>%
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  step_interact(~ MaxHR:starts_with("HasHeartDisease_"))
+  
+LASSO_recipe
+```
+
+### Question 4
+```{r}
+#| warning: false
+LASSO_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet")
+
+LASSO_workflow <- workflow() %>%
+  add_recipe(LASSO_recipe) %>%
+  add_model(LASSO_spec)
+
+LASSO_cv_folds <- vfold_cv(train, 10)
+
+LASSO_grid <- LASSO_workflow %>%
+  tune_grid(resamples = LASSO_cv_folds,
+            grid = grid_regular(penalty(), levels = 200))
+
+lowest_rmse <- LASSO_grid %>%
+  select_best(metric = "rmse")
+
+LASSO_final <- LASSO_workflow %>%
+  finalize_workflow(lowest_rmse) %>%
+  fit(train)
+
+tidy(LASSO_final)
+```
+
+### Question 5
+
+### Question 6
+```{r}
+#| warning: false
+LASSO_workflow %>%
+  finalize_workflow(lowest_rmse) %>%
+  last_fit(data_split) %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  select(rmse = .estimate)
+
+ols_final_rmse
+```
+
+### Question 7
+
+## Task 6: Logistic Regression
+### Question 1
+```{r}
+#| warning: false
+control <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 5)
+
+LR_1 <- train(HasHeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingECG,
+              data = train,
+              method = "glm",
+              family = "binomial",
+              trControl = control)
+
+LR_2 <- train(HasHeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingECG
+              + MaxHR + ExerciseAngina,
+              data = train,
+              method = "glm",
+              family = "binomial",
+              trControl = control)
+
+LR_1$results
+LR_2$results
+
+summary(LR_2$finalModel)
+```
+
+### Question 2
+```{r}
+#| warning: false
+preds <- predict(LR_2, newdata = test)
+cm <- confusionMatrix(preds, test$HasHeartDisease, positive = "Y")
+
+cm
+```
+
+### Question 3
+```{r}
+#| warning: false
+cm$byClass["Sensitivity"]
+cm$byClass["Specificity"]
+```
