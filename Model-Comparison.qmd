@@ -104,27 +104,31 @@ test <- testing(data_split)
 ### Question 1
 ```{r}
 #| warning: false
+# define ols spec
 ols_spec <- linear_reg() %>%
   set_engine("lm")
 
+# define ols model (with interaction) and transform HasHeartDisease to a dummy variable
 ols_recipe <- recipe(Age ~ MaxHR + HasHeartDisease, data = train) %>%
   step_dummy(HasHeartDisease) %>%
   step_interact(terms = ~ MaxHR:starts_with("HasHeartDisease"))
 
+# setup workflow
 ols_workflow <- workflow() %>%
   add_model(ols_spec) %>%
   add_recipe(ols_recipe)
 
+# fit
 ols_mlr <- fit(ols_workflow, data = train)
 
-tidy(ols_mlr)
-
-# extract_fit_engine(ols_mlr) %>% summary()
+# produce summary output
+extract_fit_engine(ols_mlr) %>% summary()
 ```
 
 ### Question 2
 ```{r}
 #| warning: false
+# predict using ols model and pull rmse
 ols_final_rmse <- ols_mlr %>%
   predict(test) %>%
   pull() %>%
@@ -137,6 +141,7 @@ ols_final_rmse
 ### Question 3
 ```{r}
 #| warning: false
+# define LASSO model (with interaction) and transform HasHeartDisease to a dummy variable
 LASSO_recipe <- recipe(Age ~ MaxHR + HasHeartDisease, data = train) %>%
   step_dummy(HasHeartDisease) %>%
   step_normalize(all_numeric(), -all_outcomes()) %>%
@@ -148,22 +153,28 @@ LASSO_recipe
 ### Question 4
 ```{r}
 #| warning: false
+# define spec and tune LASSO penalty hyperparam
 LASSO_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
   set_engine("glmnet")
 
+# define workflow
 LASSO_workflow <- workflow() %>%
   add_recipe(LASSO_recipe) %>%
   add_model(LASSO_spec)
 
+# define 10-fold cv
 LASSO_cv_folds <- vfold_cv(train, 10)
 
+# setup LASSO grid with 200 levels of penalty hyperparam
 LASSO_grid <- LASSO_workflow %>%
   tune_grid(resamples = LASSO_cv_folds,
             grid = grid_regular(penalty(), levels = 200))
 
+# select best model according to rmse
 lowest_rmse <- LASSO_grid %>%
   select_best(metric = "rmse")
 
+# finalize model with tuned hyperparam and fit on train set
 LASSO_final <- LASSO_workflow %>%
   finalize_workflow(lowest_rmse) %>%
   fit(train)
@@ -172,10 +183,17 @@ tidy(LASSO_final)
 ```
 
 ### Question 5
+I would expect the OLS and LASSO models to have roughly the same RMSE.  Since none of the 
+estimates are close to zero, the LASSO model likely did not shrink any terms by a large 
+amount.  Since there's only a few predictors and an interaction term, the OLS model probably 
+captures most of the variance without overfitting.  LASSO regularization prevents overfitting 
+by shrinking unnecessary predictors, but with such a small and well-specified model, this 
+isn't likely to make a huge difference.
 
 ### Question 6
 ```{r}
 #| warning: false
+# use test set to evaluate rmse and show LASSO rmse
 LASSO_workflow %>%
   finalize_workflow(lowest_rmse) %>%
   last_fit(data_split) %>%
@@ -183,10 +201,17 @@ LASSO_workflow %>%
   filter(.metric == "rmse") %>%
   select(rmse = .estimate)
 
+# show ols rmse
 ols_final_rmse
 ```
 
 ### Question 7
+The RMSE values are roughly the same since both models capture the same underlying 
+relationship between the predictors and the response.  Even though LASSO shrinks the 
+coefficients by a bit, it doesn't change the predictive behavior of the overall model 
+too much.  Since the important predictors are still there in both models, their 
+predictions on test data are very similar, leading to a similar RMSE (even with different 
+coefficient estimates).
 
 ## Task 6: Logistic Regression
 ### Question 1
