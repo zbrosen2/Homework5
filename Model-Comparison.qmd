@@ -140,7 +140,6 @@ ols_final_rmse
 
 ### Question 3
 ```{r}
-#| warning: false
 # define LASSO model (with interaction) and transform HasHeartDisease to a dummy variable
 LASSO_recipe <- recipe(Age ~ MaxHR + HasHeartDisease, data = train) %>%
   step_dummy(HasHeartDisease) %>%
