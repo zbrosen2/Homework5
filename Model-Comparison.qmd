@@ -217,16 +217,19 @@ coefficient estimates).
 ### Question 1
 ```{r}
 #| warning: false
+# define train control using repeated cv
 control <- trainControl(method = "repeatedcv",
                         number = 10,
                         repeats = 5)
 
+# LR_1 is the first logistic regression model (simpler)
 LR_1 <- train(HasHeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingECG,
               data = train,
               method = "glm",
               family = "binomial",
               trControl = control)
 
+# LR_2 is the second logistic regression model (two additional predictors)
 LR_2 <- train(HasHeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingECG
               + MaxHR + ExerciseAngina,
               data = train,
@@ -234,16 +237,22 @@ LR_2 <- train(HasHeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingE
               family = "binomial",
               trControl = control)
 
+# show results for LR_1 and LR_2
 LR_1$results
 LR_2$results
 
+# show the summary for the final model (LR_2)
 summary(LR_2$finalModel)
 ```
+
+LR_2 is the best model, as it has the highest predictive accuracy.
 
 ### Question 2
 ```{r}
 #| warning: false
+# predict using test set
 preds <- predict(LR_2, newdata = test)
+# make confusion matrix by comparing predicted response to ground truth
 cm <- confusionMatrix(preds, test$HasHeartDisease, positive = "Y")
 
 cm
@@ -252,6 +261,12 @@ cm
 ### Question 3
 ```{r}
 #| warning: false
+# show sensitivity and specificity 
 cm$byClass["Sensitivity"]
 cm$byClass["Specificity"]
 ```
+
+The model correctly identified 80% of patients who actually do have heart disease.  
+This is a fairly high true positive rate, which reduces the chance of false negatives.  
+The model correctly identified 77.7% of  patients who do not have heart disease.  
+So, the model does fairly well at avoiding false positives.
